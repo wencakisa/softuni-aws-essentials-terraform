@@ -11,6 +11,10 @@ resource "aws_vpc" "main" {
   }
 }
 
+# Availability zones (AZs)
+
+data "aws_availability_zones" "available" {}
+
 # Internet Gateway (IGW)
 
 resource "aws_internet_gateway" "igw" {
@@ -24,19 +28,22 @@ resource "aws_internet_gateway" "igw" {
 # Subnets
 
 resource "aws_subnet" "public" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = var.public_subnet_cidr_block
+  count             = var.az_count
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 2, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.name}-public-subnet"
+    Name = "${var.name}-public-subnet-${count.index}"
   }
 }
 
 # Route Tables (RT)
 
 resource "aws_route_table" "public" {
+  count  = var.az_count
   vpc_id = aws_vpc.main.id
 
   route {
@@ -45,21 +52,25 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.name}-public-rt"
+    Name = "${var.name}-public-rt-${count.index}"
   }
 }
 
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
+  count = var.az_count
+
+  subnet_id      = element(aws_subnet.public.*.id, count.index)
+  route_table_id = element(aws_route_table.public.*.id, count.index)
 }
 
 # Network Access Control Lists (NACLs)
 
 resource "aws_network_acl" "public" {
+  count = var.az_count
+
   vpc_id = aws_vpc.main.id
 
-  subnet_ids = [aws_subnet.public.id]
+  subnet_ids = [element(aws_subnet.public.*.id, count.index)]
 
   ingress {
     rule_no    = 200
@@ -80,6 +91,6 @@ resource "aws_network_acl" "public" {
   }
 
   tags = {
-    Name = "${var.name}-public-nacl"
+    Name = "${var.name}-public-nacl-${count.index}"
   }
 }

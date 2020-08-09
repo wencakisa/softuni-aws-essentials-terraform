@@ -8,15 +8,16 @@ resource "aws_key_pair" "main" {
 # EC2 instance
 
 resource "aws_instance" "main" {
-  ami           = var.ami
-  instance_type = "t2.micro"
-
-  subnet_id = aws_subnet.public.id
-
-  key_name                    = aws_key_pair.main.key_name
-  associate_public_ip_address = true
-
+  count                  = var.az_count
+  subnet_id              = element(aws_subnet.public.*.id, count.index)
   vpc_security_group_ids = [aws_security_group.main.id]
+
+  ami           = var.ec2_ami
+  instance_type = var.ec2_instance_type
+
+  key_name = aws_key_pair.main.key_name
+
+  associate_public_ip_address = true
 
   user_data = <<EOF
 #!/bin/bash
@@ -26,6 +27,6 @@ sudo service nginx start
 EOF
 
   tags = {
-    Name = "${var.name}-instance"
+    Name = "${var.name}-instance-${count.index}"
   }
 }
